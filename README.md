@@ -1,6 +1,6 @@
 # Mecenate
 
-Minimal griefing escrow for selling data, in the style of Mecenate v2 / Erasure: one contract, any plain ERC20, no owner, no fees.
+Minimal griefing escrow for selling data, in the style of Mecenate v2 / Erasure: one contract, any plain ERC20, no owner. A fixed fee on the price of each closed sale goes to a treasury address; both are set at deploy and cannot change.
 
 ## Flow
 
@@ -14,9 +14,11 @@ Minimal griefing escrow for selling data, in the style of Mecenate v2 / Erasure:
 
 `stats(seller)` counts finalized and punished sales, for reputation. Burned funds go to `0x…dEaD`.
 
+**Fee.** On `release`, and on what `punish` hands back to the seller, `feeBps` of the price (at most 10%) goes to `treasury`. Only the price part counts: never the stake, never a cancelled deal.
+
 ## Not included (vs Mecenate v2)
 
-ETH (wrap to WETH), MUSE token, Uniswap buy-and-burn, treasury fees, Sismo identity, EAS attestations (`stats` replaces them), user key registry (the buyer key travels with `accept`/`request`), proxies and factories.
+ETH (wrap to WETH), MUSE token, Uniswap buy-and-burn, Sismo identity, EAS attestations (`stats` replaces them), user key registry (the buyer key travels with `accept`/`request`), proxies and factories.
 
 ## Limits
 
@@ -56,4 +58,4 @@ npx hardhat keystore set DEPLOYER_KEY          # private key, stored encrypted
 npx hardhat ignition deploy ignition/modules/Mecenate.ts --network baseSepolia
 ```
 
-The address is printed and saved under `ignition/deployments/`. Use `--network base` for mainnet. To verify on Basescan: `npx hardhat keystore set ETHERSCAN_API_KEY`, then add `--verify` to the deploy.
+The deploying account receives the fee, 1% by default; for another treasury or fee pass `--parameters` with `{ "Mecenate": { "treasury": "0x…", "feeBps": 100 } }`. The address is printed and saved under `ignition/deployments/`. Use `--network base` for mainnet. To verify on Basescan: `npx hardhat keystore set ETHERSCAN_API_KEY`, then add `--verify` to the deploy.

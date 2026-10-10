@@ -16,13 +16,14 @@ contract MecenateTest is Test {
     Token t;
     address seller = makeAddr("seller");
     address buyer = makeAddr("buyer");
+    address treasury = makeAddr("treasury");
     address BURN = 0x000000000000000000000000000000000000dEaD;
     bytes32 constant DATA = keccak256("data");
     bytes32 constant CIPHER = keccak256("cipher");
     bytes32 PROOF = keccak256(abi.encodePacked(DATA, sha256("key"), CIPHER));
 
     function setUp() public {
-        m = new Mecenate();
+        m = new Mecenate(treasury, 100); // 1%
         t = new Token();
         for (uint256 i; i < 2; i++) {
             address u = i == 0 ? seller : buyer;
@@ -179,5 +180,46 @@ contract MecenateTest is Test {
         vm.prank(buyer);
         m.cancelRequest(rid);
         assertEq(t.balanceOf(buyer), 1000);
+    }
+
+    function _bigSale() internal returns (uint256 id) {
+        vm.prank(seller);
+        id = m.create(t, 100, 500, 1000, 1 days, PROOF, "freenet:abc");
+        vm.prank(buyer);
+        m.accept(id, "pk");
+        vm.prank(seller);
+        m.submit(id, "ek");
+    }
+
+    function test_feeOnRelease() public {
+        uint256 id = _bigSale();
+        vm.prank(buyer);
+        m.release(id);
+        assertEq(t.balanceOf(treasury), 5); // 1% of the price, nothing on the stake
+        assertEq(t.balanceOf(seller), 1000 - 100 + 600 - 5);
+        assertEq(t.balanceOf(address(m)), 0);
+    }
+
+    function test_feeOnPunishOnlyOnPriceLeft() public {
+        uint256 id = _bigSale();
+        vm.prank(buyer);
+        m.punish(id, 100); // 500 of the 600 go back to the seller: all price, so 1% of 500
+        assertEq(t.balanceOf(treasury), 5);
+        assertEq(t.balanceOf(seller), 1000 - 100 + 500 - 5);
+        assertEq(t.balanceOf(address(m)), 0);
+    }
+
+    function test_noFeeOnCancel() public {
+        uint256 id = _accepted();
+        vm.prank(seller);
+        m.cancel(id);
+        assertEq(t.balanceOf(treasury), 0);
+    }
+
+    function test_feeIsCapped() public {
+        vm.expectRevert(bytes("fee"));
+        new Mecenate(treasury, 1001);
+        vm.expectRevert(bytes("fee"));
+        new Mecenate(address(0), 100);
     }
 }

@@ -79,7 +79,7 @@ $("app").innerHTML = `
     <label>What it is<input id="sUri" placeholder="Weekly picks, 12 KB text"></label>
     <div class="row"><label>Token${tokenSelect("sTok")}</label><label>Price<input id="sPay" inputmode="decimal" placeholder="10"></label><label>Your stake<input id="sStake" inputmode="decimal" placeholder="5"></label></div>
     <div class="row"><label>Punish cost %<input id="sRatio" inputmode="decimal" value="10"></label><label>Window, days<input id="sDays" inputmode="decimal" value="3"></label></div>
-    <p class="muted">Punish cost: what the buyer burns of their own per unit of your stake. Window: how long you have to deliver, then how long the buyer has to punish.</p>
+    <p class="muted">Punish cost: what the buyer burns of their own per unit of your stake. Window: how long you have to deliver, then how long the buyer has to punish. <span id="sFee"></span></p>
     <button id="sGo" class="primary" type="button">Create post</button>
   </section>
   <section id="bay" class="tab" hidden>
@@ -115,6 +115,7 @@ $("app").innerHTML = `
       <li><b>Freenet</b> serves this page and stores ciphertexts as content-addressed chunks. Keep your node running so buyers can fetch yours.</li>
       <li><b>Wallet popup</b>: wallets can't reach Freenet's sandbox, so a small page on GitHub Pages relays the app's requests to your wallet. It only passes on reads, Mecenate calls, approvals for Mecenate, wrapping ETH into WETH and the key message. Everything else is refused.</li>
       <li><b>Your keys</b> come from one signature of a fixed message: nothing is stored. Sign it only here: it decrypts what you bought.</li>
+      <li><b>Fee</b>: when a sale closes, a fixed share of the price (shown on each post) goes to the developer. Never from the stake, never on cancelled deals. It was set when the contract was deployed and nobody can change it.</li>
       <li><b>Seller record</b> shows sales released and punished. It is onchain but can be padded by selling to yourself, so weigh the stake more than the count.</li>
     </ul>
     <form method="dialog"><button class="primary" type="submit">Got it</button></form>
@@ -122,6 +123,7 @@ $("app").innerHTML = `
 
 let chain: Chain = CHAINS.find((c) => c.mecenate) ?? CHAINS[0], account: Address | undefined, keys: Keys | undefined, busy = false, cipher: { source: File; proof: Hex; addr: string } | undefined;
 const verified = new Set<string>();
+let feeBps = 0; // read from the contract on connect: fixed at deploy
 const ready = () => !!account && verified.has(chain.id);
 const say = (t: string, link?: string) => { $("msg").textContent = t; if (link) $("msg").append(" ", Object.assign(document.createElement("a"), { href: link, target: "_blank", rel: "noopener", textContent: "View" })); };
 const POPUP = "the wallet popup (click its button)";
@@ -141,6 +143,7 @@ async function ensureChain() {
   if (!chain.mecenate) throw new Error(`Mecenate is not deployed on ${chain.name} yet.`);
   if ((await rpc<string>("eth_getCode", [chain.mecenate, "latest"])) === "0x") throw new Error(`No Mecenate contract at the configured address on ${chain.name}`);
   for (const t of chain.tokens) if (Number(await read(erc20, t.address, "decimals")) !== t.decimals) throw new Error(`${t.symbol} decimals mismatch, disabled`);
+  feeBps = Number(await read(mecenate, chain.mecenate, "feeBps"));
   verified.add(chain.id);
 }
 
@@ -297,6 +300,7 @@ async function loadPosts() {
         <div><dt>Price</dt><dd>${fmt(p.payment, d)} ${esc(sym)}</dd></div>
         <div><dt>Seller stake</dt><dd>${fmt(p.stake, d)} ${esc(sym)}</dd></div>
         <div><dt>Punish cost</dt><dd>${p.ratio / 100}% · window ${days(p.period)}</dd></div>
+        <div><dt>Fee</dt><dd>${feeBps / 100}% of the price, when the sale closes</dd></div>
         <div><dt>Seller</dt><dd>${short(p.seller)} · ${ok} sold, ${bad} punished</dd></div>
         ${deadline ? `<div><dt>Deadline</dt><dd>${deadline}</dd></div>` : ""}
       </dl>
@@ -403,6 +407,7 @@ function render() {
   c.disabled = busy;
   c.textContent = !account ? "Connect wallet" : `Switch to ${chain.name}`;
   for (const id of ["sGo", "rGo"]) $<HTMLButtonElement>(id).disabled = busy || !ready();
+  $("sFee").textContent = ready() ? `When the sale closes, ${feeBps / 100}% of the price goes to the developer; none of your stake.` : "";
   document.querySelectorAll<HTMLButtonElement>(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
   for (const id of ["market", "sell", "bay"]) $(id).hidden = id !== tab;
 }

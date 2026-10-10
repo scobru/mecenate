@@ -57,12 +57,23 @@ contract Mecenate {
     }
 
     address public constant BURN = 0x000000000000000000000000000000000000dEaD;
+    uint16 public constant MAX_FEE_BPS = 1_000;
+
+    /// Fixed at deploy, no admin: a share of the price of every closed sale goes to `treasury`.
+    address public immutable treasury;
+    uint16 public immutable feeBps;
 
     uint256 public postCount;
     uint256 public requestCount;
     mapping(uint256 => Post) internal posts;
     mapping(uint256 => Request) internal requests;
     mapping(address => Stats) public stats;
+
+    constructor(address treasury_, uint16 feeBps_) {
+        require(treasury_ != address(0) && feeBps_ <= MAX_FEE_BPS, "fee");
+        treasury = treasury_;
+        feeBps = feeBps_;
+    }
 
     event Created(uint256 indexed id, address indexed seller);
     event Accepted(uint256 indexed id, address indexed buyer);
@@ -149,7 +160,7 @@ contract Mecenate {
         p.status = Status.Finalized;
         stats[p.seller].finalized++;
         emit Finalized(id);
-        p.token.safeTransfer(p.seller, amount);
+        _payout(p, amount);
     }
 
     /// Burns `amount` of the stake; the buyer burns cost = amount * ratio / 10000 of their own on top.
@@ -165,7 +176,7 @@ contract Mecenate {
         emit Punished(id, amount, cost);
         if (cost > 0) p.token.safeTransferFrom(msg.sender, BURN, cost);
         p.token.safeTransfer(BURN, amount);
-        if (rest > 0) p.token.safeTransfer(p.seller, rest);
+        if (rest > 0) _payout(p, rest);
     }
 
     /// Seller withdraws before delivery, or the buyer gets out once the seller has not delivered within `period`.
@@ -235,6 +246,14 @@ contract Mecenate {
         delete requests[id];
         emit RequestCancelled(id);
         r.token.safeTransfer(r.buyer, r.payment);
+    }
+
+    /// Pays the seller what is left of a closed sale. The fee is taken only on the price, never on the stake:
+    /// at most `payment` of what is paid out counts as price.
+    function _payout(Post storage p, uint256 amount) private {
+        uint256 fee = (amount < p.payment ? amount : p.payment) * feeBps / 10_000;
+        if (fee > 0) p.token.safeTransfer(treasury, fee);
+        p.token.safeTransfer(p.seller, amount - fee);
     }
 
     function _accept(uint256 id, Post storage p, address buyer, bytes memory buyerKey) private {

@@ -5,6 +5,7 @@ const REQUEST = "(address buyer, uint64 minPeriod, uint16 maxRatio, address toke
 
 export const mecenate = parseAbi([
   "function postCount() view returns (uint256)",
+  "function feeBps() view returns (uint16)",
   "function requestCount() view returns (uint256)",
   `function getPost(uint256 id) view returns (${POST})`,
   `function getRequest(uint256 id) view returns (${REQUEST})`,
