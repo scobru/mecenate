@@ -33,9 +33,11 @@ contract Mecenate {
         IERC20 token;
         uint256 stake;
         uint256 payment;
-        bytes32 proofhash; // commits to data, key and ciphertext before any sale
+        bytes32 proofhash; // keccak256(sha256(data), sha256(key), sha256(ciphertext)), fixed before any sale
+        string uri; // where the ciphertext and its description are published
         bytes buyerKey; // buyer public key the seller encrypts to
         bytes encryptedKey; // symmetric key encrypted to buyerKey: on-chain proof of delivery
+        bytes revealedKey; // the symmetric key itself, once the seller makes the data public
     }
 
     struct Request {
@@ -46,6 +48,7 @@ contract Mecenate {
         uint256 payment;
         uint256 minStake;
         bytes buyerKey;
+        string description;
     }
 
     struct Stats {
@@ -58,30 +61,40 @@ contract Mecenate {
     uint256 public postCount;
     uint256 public requestCount;
     mapping(uint256 => Post) internal posts;
-    mapping(uint256 => Request) public requests;
+    mapping(uint256 => Request) internal requests;
     mapping(address => Stats) public stats;
 
-    event Created(uint256 indexed id, address indexed seller, bytes32 proofhash);
+    event Created(uint256 indexed id, address indexed seller);
     event Accepted(uint256 indexed id, address indexed buyer);
     event Submitted(uint256 indexed id);
     event Finalized(uint256 indexed id);
     event Punished(uint256 indexed id, uint256 burned, uint256 cost);
     event Cancelled(uint256 indexed id);
-    event Revealed(uint256 indexed id, bytes key);
-    event Requested(uint256 indexed id, address indexed buyer, bytes description);
+    event Revealed(uint256 indexed id);
+    event Requested(uint256 indexed id, address indexed buyer);
     event Filled(uint256 indexed requestId, uint256 indexed postId);
     event RequestCancelled(uint256 indexed id);
 
     // ---- posts ----
 
+    // Structs with dynamic fields are read whole: the app only has eth_call, no log queries.
     function getPost(uint256 id) external view returns (Post memory) {
         return posts[id];
     }
 
-    function create(IERC20 token, uint256 stake, uint256 payment, uint16 ratio, uint64 period, bytes32 proofhash)
-        external
-        returns (uint256 id)
-    {
+    function getRequest(uint256 id) external view returns (Request memory) {
+        return requests[id];
+    }
+
+    function create(
+        IERC20 token,
+        uint256 stake,
+        uint256 payment,
+        uint16 ratio,
+        uint64 period,
+        bytes32 proofhash,
+        string calldata uri
+    ) external returns (uint256 id) {
         require(stake > 0 && payment > 0 && period > 0, "zero");
         id = ++postCount;
         Post storage p = posts[id];
@@ -93,7 +106,8 @@ contract Mecenate {
         p.stake = stake;
         p.payment = payment;
         p.proofhash = proofhash;
-        emit Created(id, msg.sender, proofhash);
+        p.uri = uri;
+        emit Created(id, msg.sender);
         token.safeTransferFrom(msg.sender, address(this), stake);
     }
 
@@ -171,10 +185,13 @@ contract Mecenate {
     }
 
     /// Seller publishes the symmetric key once the sale is closed, making the data public.
-    function reveal(uint256 id, bytes calldata key) external {
+    /// The key must match the proofhash, so a wrong key cannot be passed off as the real one.
+    function reveal(uint256 id, bytes calldata key, bytes32 dataHash, bytes32 cipherHash) external {
         Post storage p = posts[id];
         require(msg.sender == p.seller && (p.status == Status.Finalized || p.status == Status.Punished), "status");
-        emit Revealed(id, key);
+        require(keccak256(abi.encodePacked(dataHash, sha256(key), cipherHash)) == p.proofhash, "proof");
+        p.revealedKey = key;
+        emit Revealed(id);
     }
 
     // ---- bay ----
@@ -186,12 +203,12 @@ contract Mecenate {
         uint16 maxRatio,
         uint64 minPeriod,
         bytes calldata buyerKey,
-        bytes calldata description
+        string calldata description
     ) external returns (uint256 id) {
         require(payment > 0 && minStake > 0, "zero");
         id = ++requestCount;
-        requests[id] = Request(msg.sender, minPeriod, maxRatio, token, payment, minStake, buyerKey);
-        emit Requested(id, msg.sender, description);
+        requests[id] = Request(msg.sender, minPeriod, maxRatio, token, payment, minStake, buyerKey, description);
+        emit Requested(id, msg.sender);
         token.safeTransferFrom(msg.sender, address(this), payment);
     }
 

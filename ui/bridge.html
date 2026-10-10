@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mecenate wallet bridge</title>
+  <style>body{font:16px system-ui;max-width:26rem;margin:2rem auto;padding:0 16px}#log{white-space:pre-wrap;word-break:break-all;color:#666}@media(prefers-color-scheme:dark){body{background:#111;color:#eee}#log{color:#aaa}}</style>
+</head>
+<body>
+  <h1>Mecenate wallet bridge</h1>
+  <p id="status">Starting…</p>
+  <button id="confirm" type="button" hidden style="width:100%;padding:12px;font-size:1rem"></button>
+  <p>Keep this window open while you use Mecenate. It only relays Mecenate's requests to your wallet: reads, switching to a supported chain, calls to the Mecenate contract, token approvals for it, and signing the fixed message that unlocks your Mecenate encryption key. Everything else is refused.</p>
+  <p><b>Only sign the key message from the Mecenate app:</b> whoever gets that signature can decrypt the data you bought.</p>
+  <p id="log"></p>
+  <script type="module" src="./src/bridge.ts"></script>
+</body>
+</html>

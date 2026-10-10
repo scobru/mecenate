@@ -17,6 +17,9 @@ contract MecenateTest is Test {
     address seller = makeAddr("seller");
     address buyer = makeAddr("buyer");
     address BURN = 0x000000000000000000000000000000000000dEaD;
+    bytes32 constant DATA = keccak256("data");
+    bytes32 constant CIPHER = keccak256("cipher");
+    bytes32 PROOF = keccak256(abi.encodePacked(DATA, sha256("key"), CIPHER));
 
     function setUp() public {
         m = new Mecenate();
@@ -31,7 +34,7 @@ contract MecenateTest is Test {
 
     function _post() internal returns (uint256 id) {
         vm.prank(seller);
-        id = m.create(t, 100, 50, 1000, 1 days, keccak256("proof"));
+        id = m.create(t, 100, 50, 1000, 1 days, PROOF, "freenet:abc");
     }
 
     function _accepted() internal returns (uint256 id) {
@@ -60,7 +63,12 @@ contract MecenateTest is Test {
         (uint128 finalized,) = m.stats(seller);
         assertEq(finalized, 1);
         vm.prank(seller);
-        m.reveal(id, "key");
+        vm.expectRevert("proof");
+        m.reveal(id, "wrong", DATA, CIPHER);
+        vm.prank(seller);
+        m.reveal(id, "key", DATA, CIPHER);
+        assertEq(m.getPost(id).revealedKey, "key");
+        assertEq(m.getPost(id).uri, "freenet:abc");
     }
 
     function test_anyoneReleasesAfterDeadline() public {
