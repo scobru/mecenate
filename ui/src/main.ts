@@ -98,7 +98,7 @@ $("app").innerHTML = `
     <p class="love">Made with <span aria-label="love">♥</span> by <a href="https://github.com/scobru" target="_blank" rel="noopener">scobru</a></p>
   </footer>`;
 
-let chain: Chain = CHAINS[0], account: Address | undefined, keys: Keys | undefined, busy = false, cipher: { file: Uint8Array; proof: Hex; name: string } | undefined;
+let chain: Chain = CHAINS.find((c) => c.mecenate) ?? CHAINS[0], account: Address | undefined, keys: Keys | undefined, busy = false, cipher: { file: Uint8Array; proof: Hex; name: string } | undefined;
 const verified = new Set<string>();
 const ready = () => !!account && verified.has(chain.id);
 const say = (t: string, link?: string) => { $("msg").textContent = t; if (link) $("msg").append(" ", Object.assign(document.createElement("a"), { href: link, target: "_blank", rel: "noopener", textContent: "View" })); };

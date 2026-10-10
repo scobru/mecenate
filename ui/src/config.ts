@@ -17,6 +17,7 @@ export const CHAINS: Chain[] = [
   {
     id: "0x14a34", // 84532
     name: "Base Sepolia",
+    mecenate: "0x5Ab815f62A595EC0d1bfF072eC78c0E6456CF337",
     explorer: "https://sepolia.basescan.org/tx/",
     tokens: [
       { symbol: "USDC", address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", decimals: 6 },
