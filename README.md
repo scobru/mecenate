@@ -34,12 +34,26 @@ ETH (wrap to WETH), MUSE token, Uniswap buy-and-burn, treasury fees, Sismo ident
 - **Buying.** After delivery the buyer picks the ciphertext, the app opens the sealed key, decrypts, checks everything against the proofhash and downloads the data. Reveal publishes the key on-chain, checked against the proofhash.
 - Reads go through `eth_call` only (no log queries), so the contract keeps what the app shows in storage. The Market shows the latest 30 posts, the Bay the latest 50 requests.
 
-To go live: deploy (`forge script script/Deploy.s.sol --rpc-url <rpc> --account <keystore> --broadcast`), put the address in `ui/src/config.ts`, enable Pages (Settings → Pages → Source: GitHub Actions), then `cd ui && npm run build && fdev website publish dist --key mecenate`.
+To go live: deploy (see below), put the address in `ui/src/config.ts`, enable Pages (Settings → Pages → Source: GitHub Actions), then `cd ui && npm run build && fdev website publish dist --key mecenate`.
 
 ## Develop
 
+Hardhat 3, Node 22. The contract tests are Solidity (`test/Mecenate.t.sol`, forge-std style) and run on Hardhat's EDR.
+
 ```bash
-forge test
-forge build && cd ui && npm install && npm test   # crypto round trip, guard rules, ABI vs contract
-npm run dev                                       # http://localhost:5173 (not sandboxed; wallet needed)
+npm install
+npm test                 # contract tests
+npm run build            # compiles to artifacts/
+cd ui && npm install
+npm test                 # crypto round trip, guard rules, ABI vs contract (needs the build above)
+npm run dev              # http://localhost:5173 (not sandboxed; wallet needed)
 ```
+
+## Deploy
+
+```bash
+npx hardhat keystore set DEPLOYER_KEY          # private key, stored encrypted
+npx hardhat ignition deploy ignition/modules/Mecenate.ts --network baseSepolia
+```
+
+The address is printed and saved under `ignition/deployments/`. Use `--network base` for mainnet. To verify on Basescan: `npx hardhat keystore set ETHERSCAN_API_KEY`, then add `--verify` to the deploy.

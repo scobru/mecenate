@@ -16,13 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: foundry-rs/foundry-toolchain@v1
-      - run: forge test && forge build
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - run: npm ci && npm test && npm run build
       - run: npm ci && npm test && npm run build
         working-directory: ui
       - uses: actions/upload-pages-artifact@v3

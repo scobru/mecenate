@@ -20,8 +20,8 @@ const tampered = file.slice(); tampered[40] ^= 1;
 assert.throws(() => openFile(key, tampered, proof), /does not open/);
 assert.throws(() => openFile(key, file, `0x${"00".repeat(32)}`), /proofhash/);
 
-// The ABI the app uses matches the compiled contract (run `forge build` first).
-const built = JSON.parse(readFileSync(new URL("../../out/Mecenate.sol/Mecenate.json", import.meta.url), "utf8")).abi as AbiFunction[];
+// The ABI the app uses matches the compiled contract (run `npm run build` in the root first).
+const built = JSON.parse(readFileSync(new URL("../../artifacts/src/Mecenate.sol/Mecenate.json", import.meta.url), "utf8")).abi as AbiFunction[];
 const sel = (abi: readonly unknown[]) => new Set((abi as AbiFunction[]).filter((f) => f.type === "function").map((f) => toFunctionSelector(f)));
 const contract = sel(built);
 for (const s of sel(mecenate)) assert.ok(contract.has(s), `app ABI function ${s} not in contract`);
