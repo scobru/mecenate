@@ -43,7 +43,11 @@ assert.equal(refuse("eth_sendTransaction", tx(app, encodeFunctionData({ abi: mec
 assert.equal(refuse("eth_sendTransaction", tx(usdc, encodeFunctionData({ abi: erc20, functionName: "approve", args: [app, 5n] })), me), undefined);
 assert.match(refuse("eth_sendTransaction", tx(usdc, encodeFunctionData({ abi: erc20, functionName: "approve", args: [me, 5n] })), me)!, /approval for Mecenate/);
 assert.match(refuse("eth_sendTransaction", tx(app, "0xdeadbeef"), me)!, /Unrecognized/);
-assert.match(refuse("eth_sendTransaction", tx(app, encodeFunctionData({ abi: mecenate, functionName: "release", args: [1n] }), { value: "0x1" }), me)!, /never sends ETH/);
+assert.match(refuse("eth_sendTransaction", tx(app, encodeFunctionData({ abi: mecenate, functionName: "release", args: [1n] }), { value: "0x1" }), me)!, /takes no ETH/);
+const weth = CHAINS[1].tokens.find((t) => t.wraps)!.address;
+assert.equal(refuse("eth_sendTransaction", tx(weth, encodeFunctionData({ abi: erc20, functionName: "deposit" }), { value: "0x5" }), me), undefined);
+assert.match(refuse("eth_sendTransaction", tx(usdc, encodeFunctionData({ abi: erc20, functionName: "deposit" }), { value: "0x5" }), me)!, /Only WETH/);
+assert.match(refuse("eth_sendTransaction", tx(weth, encodeFunctionData({ abi: erc20, functionName: "approve", args: [app, 5n] }), { value: "0x5" }), me)!, /Only wrapping/);
 assert.match(refuse("eth_sendTransaction", tx(app, encodeFunctionData({ abi: mecenate, functionName: "release", args: [1n] }), { chainId: CHAINS[0].id }), me)!, /deployed/);
 assert.match(refuse("eth_sendTransaction", tx(app, encodeFunctionData({ abi: mecenate, functionName: "release", args: [1n] })), usdc)!, /Sender/);
 console.log("ok");

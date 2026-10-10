@@ -1,7 +1,7 @@
 import type { Address } from "viem";
 
-export type Token = { symbol: string; address: Address; decimals: number };
-// mecenate is undefined until the contract is deployed on that chain (forge script script/Deploy.s.sol).
+export type Token = { symbol: string; address: Address; decimals: number; wraps?: true }; // wraps: WETH, filled from ETH on demand
+// mecenate is undefined until the contract is deployed on that chain (see README, Deploy).
 export type Chain = { id: string; name: string; explorer: string; mecenate?: Address; tokens: Token[] };
 
 export const CHAINS: Chain[] = [
@@ -11,7 +11,7 @@ export const CHAINS: Chain[] = [
     explorer: "https://basescan.org/tx/",
     tokens: [
       { symbol: "USDC", address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6 },
-      { symbol: "WETH", address: "0x4200000000000000000000000000000000000006", decimals: 18 },
+      { symbol: "WETH", address: "0x4200000000000000000000000000000000000006", decimals: 18, wraps: true },
     ],
   },
   {
@@ -21,7 +21,7 @@ export const CHAINS: Chain[] = [
     explorer: "https://sepolia.basescan.org/tx/",
     tokens: [
       { symbol: "USDC", address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", decimals: 6 },
-      { symbol: "WETH", address: "0x4200000000000000000000000000000000000006", decimals: 18 },
+      { symbol: "WETH", address: "0x4200000000000000000000000000000000000006", decimals: 18, wraps: true },
     ],
   },
 ];

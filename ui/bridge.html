@@ -10,7 +10,7 @@
   <h1>Mecenate wallet bridge</h1>
   <p id="status">Starting…</p>
   <button id="confirm" type="button" hidden style="width:100%;padding:12px;font-size:1rem"></button>
-  <p>Keep this window open while you use Mecenate. It only relays Mecenate's requests to your wallet: reads, switching to a supported chain, calls to the Mecenate contract, token approvals for it, and signing the fixed message that unlocks your Mecenate encryption key. Everything else is refused.</p>
+  <p>Keep this window open while you use Mecenate. It only relays Mecenate's requests to your wallet: reads, switching to a supported chain, calls to the Mecenate contract, token approvals for it, wrapping ETH into WETH, and signing the fixed message that unlocks your Mecenate encryption key. Everything else is refused.</p>
   <p><b>Only sign the key message from the Mecenate app:</b> whoever gets that signature can decrypt the data you bought.</p>
   <p id="log"></p>
   <script type="module" src="./src/bridge.ts"></script>

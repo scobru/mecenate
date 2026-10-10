@@ -137,8 +137,12 @@ async function getKeys() {
   return keys;
 }
 
-async function send(to: Address, data: Hex) {
-  const hash = await rpc<Hex>("eth_sendTransaction", [{ from: account, to, data, value: "0x0", chainId: chain.id }], 180_000);
+async function send(to: Address, data: Hex, value = 0n) {
+  const tx = { from: account, to, data, value: `0x${value.toString(16)}`, chainId: chain.id };
+  // Simulate first: a call that would revert fails here with its reason, not as a wallet that "can't estimate gas".
+  try { await rpc("eth_estimateGas", [tx]); }
+  catch (e) { throw new Error(`This transaction would fail: ${(e as Error).message}`); }
+  const hash = await rpc<Hex>("eth_sendTransaction", [tx], 180_000);
   say("Pending…", chain.explorer + hash);
   for (let i = 0; i < 90; i++) {
     const r = await rpc<{ status: string } | null>("eth_getTransactionReceipt", [hash]);
@@ -148,7 +152,14 @@ async function send(to: Address, data: Hex) {
   throw new Error("Timed out waiting for " + hash);
 }
 const call = (functionName: string, args: unknown[]) => send(chain.mecenate!, encodeFunctionData({ abi: mecenate, functionName, args } as never));
+/** Makes sure `need` of `t` can be pulled by Mecenate: enough balance (wrapping ETH into WETH if short) and allowance. */
 async function allow(t: Token, need: bigint) {
+  const have: bigint = await read(erc20, t.address, "balanceOf", [account]);
+  if (have < need) {
+    if (!t.wraps) throw new Error(`Not enough ${t.symbol}: you have ${fmt(have, t.decimals)}, this needs ${fmt(need, t.decimals)}.`);
+    say(`Wrap ${fmt(need - have, 18)} ETH into WETH in ${POPUP}…`);
+    await send(t.address, encodeFunctionData({ abi: erc20, functionName: "deposit" }), need - have);
+  }
   if ((await read(erc20, t.address, "allowance", [account, chain.mecenate])) >= need) return;
   say(`Approve ${fmt(need, t.decimals)} ${t.symbol} for Mecenate in ${POPUP}…`);
   await send(t.address, encodeFunctionData({ abi: erc20, functionName: "approve", args: [chain.mecenate!, need] })); // exact amount, never unlimited

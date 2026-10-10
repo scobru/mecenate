@@ -27,6 +27,7 @@ export const erc20 = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
   "function balanceOf(address owner) view returns (uint256)",
   "function decimals() view returns (uint8)",
+  "function deposit() payable",
 ]);
 
 export const STATUS = ["None", "Open", "Accepted", "Delivered", "Finalized", "Punished", "Cancelled"] as const;
