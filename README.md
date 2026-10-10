@@ -30,8 +30,8 @@ ETH (wrap to WETH), MUSE token, Uniswap buy-and-burn, treasury fees, Sismo ident
 `ui/` is the web app, built to be published on [Freenet](https://freenet.org) like FreeSwap: the page runs in Freenet's sandbox, and the wallet is reached through `bridge.html`, a popup served from GitHub Pages that relays only Mecenate's requests (`ui/src/guard.ts`).
 
 - **Keys.** The wallet signs one fixed message per session; the app derives from it an X25519 key (buyers receive keys on it) and a seed for encrypting files. Nothing is stored: the sandbox has no storage. Whoever gets that signature can decrypt what you bought, so the bridge signs only that message and asks for a click first.
-- **Selling.** The file is encrypted in the browser (AES-256-GCM) and you download the ciphertext; publish it anywhere and put where in the post. The proofhash commits to the data, the key and the ciphertext. To deliver, the seller picks the ciphertext again: the app re-derives its key, checks it against the proofhash and seals it to the buyer.
-- **Buying.** After delivery the buyer picks the ciphertext, the app opens the sealed key, decrypts, checks everything against the proofhash and downloads the data. Reveal publishes the key on-chain, checked against the proofhash.
+- **Selling.** The file is encrypted in the browser (AES-256-GCM) and the ciphertext is published on Freenet as 512 KB content-addressed chunks plus a manifest, using FreeTunes' chunk contract (`ui/src/chunk.wasm`, from `scobru/freetunes`). The post stores `freenet:<manifest> <description>`; its proofhash commits to the data, the key and the ciphertext. To deliver, the app fetches the ciphertext, re-derives its key, checks it against the proofhash and seals it to the buyer.
+- **Buying.** After delivery the app fetches the ciphertext from Freenet, opens the sealed key, decrypts, checks everything against the proofhash and downloads the data. Freenet is not trusted for integrity: a wrong chunk fails the proofhash. Reveal publishes the key on-chain, checked against the proofhash. Posts whose uri is not a `freenet:` address fall back to picking the ciphertext file by hand.
 - Reads go through `eth_call` only (no log queries), so the contract keeps what the app shows in storage. The Market shows the latest 30 posts, the Bay the latest 50 requests.
 
 To go live: deploy (see below), put the address in `ui/src/config.ts`, enable Pages (Settings → Pages → Source: GitHub Actions), then `cd ui && npm run build && fdev website publish dist --key mecenate`.
@@ -46,7 +46,7 @@ npm test                 # contract tests
 npm run build            # compiles to artifacts/
 cd ui && npm install
 npm test                 # crypto round trip, guard rules, ABI vs contract (needs the build above)
-npm run dev              # http://localhost:5173 (not sandboxed; wallet needed)
+npm run dev              # http://localhost:5173 (not sandboxed; wallet and a Freenet node on 127.0.0.1:7509 needed, or set VITE_NODE)
 ```
 
 ## Deploy

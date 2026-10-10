@@ -2,6 +2,7 @@ import { decodeFunctionResult, encodeFunctionData, formatUnits, getAddress, hexT
 import { erc20, mecenate, STATUS } from "./abi.ts";
 import { BRIDGE_URL, CHAINS, KEY_MESSAGE, type Chain, type Token } from "./config.ts";
 import { encryptFile, keysFrom, openFile, seal, sellerOpen, unseal, type Keys } from "./crypto.ts";
+import { download as fromFreenet, makeUri, parseUri, upload as toFreenet } from "./freenet.ts";
 import { STYLE } from "./style.ts";
 
 // Wallet-only: the Freenet sandbox blocks fetch to external RPCs, so every read and write goes through the wallet.
@@ -73,10 +74,9 @@ $("app").innerHTML = `
   <section id="market" class="tab"><div id="posts"></div></section>
   <section id="sell" class="tab card" hidden>
     <h2>Sell data</h2>
-    <ol class="steps"><li>Pick the file: it is encrypted here and you download the ciphertext.</li><li>Publish the ciphertext anywhere (Freenet, IPFS, a link) and paste where below.</li><li>Stake behind it. Buyers get the key only after paying; until the window closes they can burn your stake.</li></ol>
+    <ol class="steps"><li>Pick the file: it is encrypted here and the ciphertext is published on Freenet. Only buyers get the key.</li><li>Stake behind it. Buyers get the key only after paying; until the window closes they can burn your stake.</li><li>Keep your Freenet node running for a while so others can fetch the ciphertext.</li></ol>
     <label>File<input id="sFile" type="file"></label>
-    <button id="sEnc" class="secondary" type="button">Encrypt and download</button>
-    <label>Where the ciphertext is, and what it is<input id="sUri" placeholder="freenet:… — weekly picks, 12 KB text"></label>
+    <label>What it is<input id="sUri" placeholder="Weekly picks, 12 KB text"></label>
     <div class="row"><label>Token${tokenSelect("sTok")}</label><label>Price<input id="sPay" inputmode="decimal" placeholder="10"></label><label>Your stake<input id="sStake" inputmode="decimal" placeholder="5"></label></div>
     <div class="row"><label>Punish cost %<input id="sRatio" inputmode="decimal" value="10"></label><label>Window, days<input id="sDays" inputmode="decimal" value="3"></label></div>
     <p class="muted">Punish cost: what the buyer burns of their own per unit of your stake. Window: how long you have to deliver, then how long the buyer has to punish.</p>
@@ -98,7 +98,7 @@ $("app").innerHTML = `
     <p class="love">Made with <span aria-label="love">♥</span> by <a href="https://github.com/scobru" target="_blank" rel="noopener">scobru</a></p>
   </footer>`;
 
-let chain: Chain = CHAINS.find((c) => c.mecenate) ?? CHAINS[0], account: Address | undefined, keys: Keys | undefined, busy = false, cipher: { file: Uint8Array; proof: Hex; name: string } | undefined;
+let chain: Chain = CHAINS.find((c) => c.mecenate) ?? CHAINS[0], account: Address | undefined, keys: Keys | undefined, busy = false, cipher: { source: File; proof: Hex; addr: string } | undefined;
 const verified = new Set<string>();
 const ready = () => !!account && verified.has(chain.id);
 const say = (t: string, link?: string) => { $("msg").textContent = t; if (link) $("msg").append(" ", Object.assign(document.createElement("a"), { href: link, target: "_blank", rel: "noopener", textContent: "View" })); };
@@ -179,7 +179,16 @@ const download = (bytes: Uint8Array, name: string) => {
 
 // ---- market ----
 
-const actions: Record<string, (id: bigint, p: Post, file?: Promise<{ bytes: Uint8Array; name: string }>) => Promise<void>> = {
+type Picked = Promise<{ bytes: Uint8Array; name: string }>;
+const freenetAddr = (p: Post) => parseUri(p.uri).addr;
+/** The post's ciphertext: from Freenet when the post points there, else the file the user picked. */
+async function ciphertext(id: bigint, p: Post, file?: Picked) {
+  const addr = freenetAddr(p);
+  if (!addr) return file!;
+  const bytes = await fromFreenet(addr, (i, n) => say(`Fetching post #${id} from Freenet… ${i}/${n}`));
+  return { bytes, name: `post-${id}` };
+}
+const actions: Record<string, (id: bigint, p: Post, file?: Picked) => Promise<void>> = {
   async buy(id, p) {
     const t = tokenOf(p.token)!, { pub } = await getKeys();
     await allow(t, p.payment);
@@ -188,14 +197,14 @@ const actions: Record<string, (id: bigint, p: Post, file?: Promise<{ bytes: Uint
     say(`Bought post #${id}. The seller has ${days(p.period)} to deliver.`);
   },
   async deliver(id, p, file) {
-    const f = await file!, k = await getKeys();
+    const f = await ciphertext(id, p, file), k = await getKeys();
     const { key } = sellerOpen(k.seed, f.bytes, p.proofhash); // also proves this is the file the post committed to
     say(`Deliver the key for post #${id} in ${POPUP}…`);
     await call("submit", [id, seal(key, p.buyerKey)]);
     say(`Delivered. The buyer has ${days(p.period)} to release or punish; after that anyone can release your stake.`);
   },
   async decrypt(id, p, file) {
-    const f = await file!;
+    const f = await ciphertext(id, p, file);
     const key = p.revealedKey !== "0x" ? hexToBytes(p.revealedKey) : unseal(p.encryptedKey, (await getKeys()).priv);
     const { data } = openFile(key, f.bytes, p.proofhash);
     download(data, f.name.replace(/\.mecenate$/, "") || `post-${id}`);
@@ -219,7 +228,7 @@ const actions: Record<string, (id: bigint, p: Post, file?: Promise<{ bytes: Uint
     say(`Stake added to post #${id}.`);
   },
   async reveal(id, p, file) {
-    const f = await file!, k = await getKeys();
+    const f = await ciphertext(id, p, file), k = await getKeys();
     const { key, dataHash, cipherHash } = sellerOpen(k.seed, f.bytes, p.proofhash);
     say(`Publish the key for post #${id} in ${POPUP}…`);
     await call("reveal", [id, toHex(key), dataHash, cipherHash]);
@@ -261,7 +270,7 @@ async function loadPosts() {
     const deadline = p.status === 2 ? `deliver by ${when(p.deadline)}` : p.status === 3 ? `punish window ends ${when(p.deadline)}` : "";
     $("posts").insertAdjacentHTML("beforeend", `<article class="card post">
       <div class="line"><b>#${id}</b><span class="badge s${p.status}">${STATUS[p.status]}</span></div>
-      <p class="uri">${esc(p.uri) || "<span class=muted>no description</span>"}</p>
+      <p class="uri">${esc(parseUri(p.uri).text) || "<span class=muted>no description</span>"}${freenetAddr(p) ? ` <span class="badge">on Freenet</span>` : ""}</p>
       <dl class="details">
         <div><dt>Price</dt><dd>${fmt(p.payment, d)} ${esc(sym)}</dd></div>
         <div><dt>Seller stake</dt><dd>${fmt(p.stake, d)} ${esc(sym)}</dd></div>
@@ -278,30 +287,27 @@ $("posts").addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-act]");
   if (!btn || busy) return;
   const id = BigInt(btn.dataset.id!), act = btn.dataset.act!, p = posts.get(id)!;
-  const file = NEEDS_FILE.has(act) ? pickFile() : undefined; // before any await: the picker needs this click
+  const file = NEEDS_FILE.has(act) && !freenetAddr(p) ? pickFile() : undefined; // before any await: the picker needs this click
   if (file) say("Choose the encrypted file (the ciphertext published for this post)…");
   void run(() => actions[act](id, p, file));
 });
 
 // ---- sell ----
 
-$("sEnc").addEventListener("click", () => void run(async () => {
+$("sGo").addEventListener("click", () => void run(async () => {
   const f = $<HTMLInputElement>("sFile").files?.[0];
   if (!f) throw new Error("Choose a file first");
-  const { seed } = await getKeys();
-  const { file, proof } = encryptFile(seed, new Uint8Array(await f.arrayBuffer()));
-  cipher = { file, proof, name: `${f.name}.mecenate` };
-  download(file, cipher.name);
-  say(`Encrypted. Publish ${cipher.name} somewhere buyers can fetch it, then paste where it is and create the post. Keep it: you need it again to deliver.`);
-}));
-
-$("sGo").addEventListener("click", () => void run(async () => {
-  if (!cipher) throw new Error("Encrypt a file first");
-  if (!val("sUri")) throw new Error("Say where the ciphertext is published");
-  const t = pickedToken("sTok"), pay = amount("sPay", t), stake = amount("sStake", t);
+  if (!val("sUri")) throw new Error("Say what the file is");
+  const t = pickedToken("sTok"), pay = amount("sPay", t), stake = amount("sStake", t), ratio = percentBps("sRatio"), period = seconds("sDays");
+  if (cipher?.source !== f) { // a retry after a failed transaction reuses the upload
+    const { seed } = await getKeys();
+    const { file, proof } = encryptFile(seed, new Uint8Array(await f.arrayBuffer()));
+    const addr = await toFreenet(file, (i, n) => say(`Publishing the encrypted file on Freenet… ${i}/${n}`));
+    cipher = { source: f, proof, addr };
+  }
   await allow(t, stake);
   say(`Create the post, staking ${fmt(stake, t.decimals)} ${t.symbol}, in ${POPUP}…`);
-  await call("create", [t.address, stake, pay, percentBps("sRatio"), seconds("sDays"), cipher.proof, val("sUri")]);
+  await call("create", [t.address, stake, pay, ratio, period, cipher.proof, makeUri(cipher.addr, val("sUri"))]);
   cipher = undefined;
   $<HTMLInputElement>("sFile").value = "";
   say("Post created. It is on the Market tab.");
@@ -374,7 +380,7 @@ function render() {
   c.hidden = ready();
   c.disabled = busy;
   c.textContent = !account ? "Connect wallet" : `Switch to ${chain.name}`;
-  for (const id of ["sEnc", "sGo", "rGo"]) $<HTMLButtonElement>(id).disabled = busy || !ready();
+  for (const id of ["sGo", "rGo"]) $<HTMLButtonElement>(id).disabled = busy || !ready();
   document.querySelectorAll<HTMLButtonElement>(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
   for (const id of ["market", "sell", "bay"]) $(id).hidden = id !== tab;
 }
