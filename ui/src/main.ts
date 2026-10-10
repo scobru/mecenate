@@ -94,9 +94,31 @@ $("app").innerHTML = `
     <div id="requests"></div>
   </section>
   <footer>
+    <button id="how" class="link" type="button">How it works</button>
     <p class="muted">Griefing escrow on ${CHAINS.map((c) => c.name).join(" and ")}, served from Freenet. Unaudited: use small amounts.</p>
     <p class="love">Made with <span aria-label="love">♥</span> by <a href="https://github.com/scobru" target="_blank" rel="noopener">scobru</a></p>
-  </footer>`;
+  </footer>
+  <dialog id="howto" aria-labelledby="howTitle">
+    <h2 id="howTitle">How it works</h2>
+    <p class="muted">Sell data to strangers without trusting them: the seller puts money at stake, and an unhappy buyer can burn it, at a cost.</p>
+    <ol class="flow">
+      <li><b>Sell</b><span>Your file is encrypted in this page and the ciphertext goes on Freenet. The post, onchain, commits to the file, the key and the ciphertext, and holds your stake.</span></li>
+      <li><b>Buy</b><span>The buyer pays into the contract. You have the window to deliver, or they can take their money back.</span></li>
+      <li><b>Deliver</b><span>The app sends the key, encrypted so only the buyer can open it. From now on the payment sits with your stake: no refunds.</span></li>
+      <li><b>Release or punish</b><span>The buyer decrypts and checks the file matches the commitment. They release (you get stake + price), or within the window burn part of your stake, paying the punish cost % of it themselves. If they do nothing, anyone can release after the window.</span></li>
+      <li><b>Make public</b><span>Optionally, after the sale, publish the key so anyone can decrypt.</span></li>
+    </ol>
+    <h3>Bay</h3>
+    <p class="muted">Buyers can post what they look for with an escrowed reward and their terms. A seller fills it with a matching post, and the sale goes on as above.</p>
+    <h3>Under the hood</h3>
+    <ul>
+      <li><b>Freenet</b> serves this page and stores ciphertexts as content-addressed chunks. Keep your node running so buyers can fetch yours.</li>
+      <li><b>Wallet popup</b>: wallets can't reach Freenet's sandbox, so a small page on GitHub Pages relays the app's requests to your wallet. It only passes on reads, Mecenate calls, approvals for Mecenate, wrapping ETH into WETH and the key message. Everything else is refused.</li>
+      <li><b>Your keys</b> come from one signature of a fixed message: nothing is stored. Sign it only here: it decrypts what you bought.</li>
+      <li><b>Seller record</b> shows sales released and punished. It is onchain but can be padded by selling to yourself, so weigh the stake more than the count.</li>
+    </ul>
+    <form method="dialog"><button class="primary" type="submit">Got it</button></form>
+  </dialog>`;
 
 let chain: Chain = CHAINS.find((c) => c.mecenate) ?? CHAINS[0], account: Address | undefined, keys: Keys | undefined, busy = false, cipher: { source: File; proof: Hex; addr: string } | undefined;
 const verified = new Set<string>();
@@ -407,4 +429,5 @@ async function run(task: () => Promise<void>) {
 
 document.querySelectorAll<HTMLButtonElement>(".tabs button").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab!; void refresh(); }));
 $("connect").addEventListener("click", () => void run(!account ? connect : ensureChain));
+$("how").addEventListener("click", () => $<HTMLDialogElement>("howto").showModal());
 void refresh();

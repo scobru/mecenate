@@ -40,5 +40,14 @@ input[type=file]{padding:8px}
 footer{margin-top:20px;font-size:.85rem;color:var(--muted)}
 footer p{margin:0}
 .love{text-align:center;margin-top:8px!important}.love span{color:var(--accent)}.love a{color:inherit;font-weight:600}
+.link{border:0;background:none;color:var(--accent);font:inherit;font-size:.9rem;cursor:pointer;padding:0;margin-bottom:6px}
+dialog{max-width:30rem;width:calc(100% - 32px);border:1px solid var(--line);border-radius:20px;padding:20px;background:var(--card);color:var(--text)}
+dialog::backdrop{background:rgb(0 0 0 / .55)}
+dialog h2{margin:0 0 8px}dialog h3{margin:16px 0 6px;font-size:1rem}
+dialog ul{margin:0;padding-left:18px;font-size:.9rem}dialog li+li{margin-top:4px}dialog p{margin:0}
+.flow{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:22px}
+.flow li{position:relative;background:var(--box);border-radius:14px;padding:10px 12px;font-size:.9rem;display:grid;gap:2px}
+.flow li+li::before{content:"↓";position:absolute;top:-21px;left:50%;transform:translateX(-50%);color:var(--accent)}
+.flow span{color:var(--muted)}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 `;
